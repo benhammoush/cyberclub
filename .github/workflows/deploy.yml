@@ -8,6 +8,9 @@ on:
       environment:
         type: string
         required: true
+    secrets:
+      VERCEL_TOKEN:
+        required: true
 permissions:
   contents: read
   actions: read

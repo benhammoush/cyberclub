@@ -24,3 +24,5 @@ jobs:
     with:
       source_sha: ${{ inputs.sha }}
       environment: production
+    secrets:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
