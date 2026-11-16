@@ -52,6 +52,10 @@ export function control(command) {
   );
   if (command === 'validate') return;
   assert.equal(command, 'deploy');
+  assert.ok(
+    process.env.VERCEL_TOKEN?.trim(),
+    'Missing environment credential VERCEL_TOKEN',
+  );
   artifact('verify');
   const variables = JSON.parse(process.env.CI_CONFIGURATION);
   const env = { ...process.env };

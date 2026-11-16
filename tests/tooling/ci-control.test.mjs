@@ -18,7 +18,7 @@ import {
   digest,
   deliveryRecord,
 } from '../../scripts/ci-artifact.mjs';
-import { configuration } from '../../scripts/ci-control.mjs';
+import { configuration, control } from '../../scripts/ci-control.mjs';
 import { devEvidence } from '../../scripts/ci-dev-evidence.mjs';
 import { releaseContext } from '../../scripts/ci-source.mjs';
 import {
@@ -94,6 +94,26 @@ test('workflow mutations cannot remove checks, gates, evidence or local ownershi
       docs['verify-and-deploy-prod.yml'].jobs.deploy_production.needs = [];
     },
     (docs) => {
+      delete docs['verify-and-deploy-dev.yml'].jobs.deploy_dev.secrets;
+    },
+    (docs) => {
+      delete docs['verify-and-deploy-prod.yml'].jobs.deploy_production.secrets;
+    },
+    (docs) => {
+      docs['verify-and-deploy-dev.yml'].jobs.deploy_dev.secrets = 'inherit';
+    },
+    (docs) => {
+      docs['verify-and-deploy-dev.yml'].jobs.verify.secrets = {
+        VERCEL_TOKEN: '${{ secrets.VERCEL_TOKEN }}',
+      };
+    },
+    (docs) => {
+      delete docs['deploy.yml'].on.workflow_call.secrets;
+    },
+    (docs) => {
+      docs['deploy.yml'].on.workflow_call.secrets.VERCEL_TOKEN.required = false;
+    },
+    (docs) => {
       delete docs['deploy.yml'].jobs.deploy.environment;
     },
     (docs) => {
@@ -148,6 +168,33 @@ test('configuration rejects shared coupling, unknown variables and public secret
     { buildEnvironment: { dev: { VITE_TOKEN: 'secret' }, production: {} } },
   ])
     assert.throws(() => configuration({ ...config, ...change }));
+});
+
+test('delivery rejects a missing environment credential before artifact or provider access', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'cyberclub-credential-'));
+  const previousDirectory = process.cwd();
+  const previousToken = process.env.VERCEL_TOKEN;
+  try {
+    mkdirSync(join(directory, 'control/.github'), { recursive: true });
+    writeFileSync(
+      join(directory, 'control/.github/ci-cd.json'),
+      readFileSync('.github/ci-cd.json'),
+    );
+    process.chdir(directory);
+    for (const value of [undefined, '', '   ']) {
+      if (value === undefined) delete process.env.VERCEL_TOKEN;
+      else process.env.VERCEL_TOKEN = value;
+      assert.throws(
+        () => control('deploy'),
+        /Missing environment credential VERCEL_TOKEN/,
+      );
+    }
+  } finally {
+    process.chdir(previousDirectory);
+    if (previousToken === undefined) delete process.env.VERCEL_TOKEN;
+    else process.env.VERCEL_TOKEN = previousToken;
+    rmSync(directory, { recursive: true, force: true });
+  }
 });
 
 test('release context rejects old repositories, invalid sources and unsafe production events', () => {

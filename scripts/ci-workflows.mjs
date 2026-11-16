@@ -109,7 +109,11 @@ export function workflowContract(documents) {
   ]) {
     assert.equal(job.uses, `./.github/workflows/${file}.yml`);
     assert.deepEqual(job.with, { source_sha: source, environment: target });
-    assert.ok(!job.secrets);
+    if (file === 'deploy')
+      assert.deepEqual(job.secrets, {
+        VERCEL_TOKEN: '${{ secrets.VERCEL_TOKEN }}',
+      });
+    else assert.ok(!job.secrets);
   }
   assert.equal(dev.jobs.deploy_dev.needs, 'verify');
   assert.equal(prod.jobs.deploy_production.needs, 'verify_release');
@@ -130,7 +134,11 @@ export function workflowContract(documents) {
       'environment',
       'source_sha',
     ]);
-    assert.ok(!doc.on.workflow_call.secrets);
+    if (doc === deploy)
+      assert.deepEqual(doc.on.workflow_call.secrets, {
+        VERCEL_TOKEN: { required: true },
+      });
+    else assert.ok(!doc.on.workflow_call.secrets);
   }
   const checks = verify.jobs.verify;
   assert.ok(!checks.environment);
