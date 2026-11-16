@@ -26,7 +26,7 @@ jobs:
           fetch-depth: 0
           path: control
           persist-credentials: false
-      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
         with:
           node-version: '24.21.0'
       - run: node control/scripts/ci-control.mjs validate
@@ -41,7 +41,7 @@ jobs:
           ref: ${{ inputs.source_sha }}
           path: candidate
           persist-credentials: false
-      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
         with:
           node-version: '24.21.0'
           cache: npm
