@@ -1,0 +1,23 @@
+name: Verify PR
+on:
+  pull_request: null
+permissions:
+  contents: read
+  actions: read
+jobs:
+  verify:
+    name: PR checks
+    uses: ./.github/workflows/verify.yml
+    with:
+      source_sha: ${{ github.sha }}
+      environment: dev
+  verify_result:
+    name: Verify
+    needs: verify
+    if: always()
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Require successful PR checks
+        run: test "$VERIFY_RESULT" = success
+        env:
+          VERIFY_RESULT: ${{ needs.verify.result }}

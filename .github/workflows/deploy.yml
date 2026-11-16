@@ -1,0 +1,62 @@
+name: Deploy tested artifact
+on:
+  workflow_call:
+    inputs:
+      source_sha:
+        type: string
+        required: true
+      environment:
+        type: string
+        required: true
+permissions:
+  contents: read
+  actions: read
+jobs:
+  deploy:
+    name: Publish tested artifact
+    if: github.repository == 'benhammoush/cyberclub' && github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment: ${{ inputs.environment }}
+    concurrency:
+      group: deploy-${{ github.repository }}-${{ inputs.environment }}
+      cancel-in-progress: false
+    env:
+      CI_SOURCE_SHA: ${{ inputs.source_sha }}
+      CI_ENVIRONMENT: ${{ inputs.environment }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: ${{ github.workflow_sha }}
+          fetch-depth: 0
+          path: control
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: '24.21.0'
+      - run: node control/scripts/ci-control.mjs validate
+      - run: node control/scripts/ci-source.mjs
+      - name: Recheck dev evidence after approval
+        if: inputs.environment == 'production'
+        run: node control/scripts/ci-dev-evidence.mjs
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: build-${{ inputs.source_sha }}-${{ inputs.environment }}
+          path: candidate
+      - run: node control/scripts/ci-artifact.mjs verify
+      - name: Deploy with trusted adapter and environment-scoped credentials
+        run: node control/scripts/ci-control.mjs deploy
+        env:
+          CI_CONFIGURATION: ${{ toJSON(vars) }}
+          GH_TOKEN: ${{ github.token }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      - name: Retain evidence after uncertain mutation or verification failure
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: delivery-record-${{ inputs.environment }}
+          path: candidate/delivery-record.json
+          if-no-files-found: ignore
+          retention-days: 90

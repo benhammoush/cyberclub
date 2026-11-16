@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "profile": "web",
+  "nodeVersion": "24.21.0",
+  "integration": false,
+  "legacyChecks": [],
+  "deploymentVariables": [
+    "VERCEL_TEAM_ID",
+    "VERCEL_DEV_PROJECT_ID",
+    "VERCEL_PRODUCTION_PROJECT_ID"
+  ],
+  "buildEnvironment": { "dev": {}, "production": {} }
+}

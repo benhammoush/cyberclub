@@ -1,0 +1,29 @@
+name: Verify and deploy to dev
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: Exact merged source SHA to revalidate and redeploy in dev
+        type: string
+        required: true
+permissions:
+  contents: read
+  actions: read
+jobs:
+  verify:
+    name: Dev checks
+    uses: ./.github/workflows/verify.yml
+    with:
+      source_sha: ${{ inputs.sha || github.sha }}
+      environment: dev
+  deploy_dev:
+    name: Dev delivery
+    needs: verify
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    uses: ./.github/workflows/deploy.yml
+    with:
+      source_sha: ${{ inputs.sha || github.sha }}
+      environment: dev

@@ -1,0 +1,126 @@
+/**
+ * Exercise tablet/desktop commands and phone hiding without requesting external documents.
+ * @packageDocumentation
+ */
+
+import { expect, test } from '@playwright/test';
+import { openShowcase } from './openShowcase';
+
+for (const width of [1440, 768, 601]) {
+  test(`archive terminal at ${width}px stays local until a document link is followed`, async ({
+    page,
+    baseURL,
+  }) => {
+    const external: string[] = [];
+    const popups: string[] = [];
+    page.on('request', (request) => {
+      if (new URL(request.url()).origin !== new URL(baseURL!).origin)
+        external.push(request.url());
+    });
+    page.on('popup', (popup) => popups.push(popup.url()));
+    await page.setViewportSize({ width, height: 900 });
+    await openShowcase(page);
+    const region = page.locator('#terminal');
+    await region.scrollIntoViewIfNeeded();
+    const input = region.getByRole('textbox', { name: 'Command' });
+    await expect(input).toBeFocused();
+    await expect(input).toHaveCSS('color', 'rgb(57, 255, 20)');
+    await expect(input).toHaveCSS('outline-style', 'none');
+    await expect(input).toHaveCSS('box-shadow', 'none');
+    await expect(region.locator('label [aria-hidden="true"]')).toHaveText(
+      'Terminal/',
+    );
+    await expect(region.getByText(/Welcome/)).toHaveCount(0);
+    await input.fill('help');
+    await input.press('Enter');
+    await expect(region.getByRole('log')).toContainText(
+      'clear — Clear the screen',
+    );
+    for (const command of ['report', 'mugshot']) {
+      await input.fill(command);
+      await input.press('Enter');
+    }
+    const links = region.getByRole('link');
+    await expect(links).toHaveCount(2);
+    await expect(links.nth(0)).toHaveAttribute(
+      'href',
+      'https://dripperzcyberclub.mypinata.cloud/ipfs/QmNSwRjCrKQDuqc1CthMDX39v1qrWWzFtGU5d445k41tYK',
+    );
+    await expect(links.nth(1)).toContainText('58 MB');
+    await input.fill('draft');
+    await input.press('ArrowUp');
+    await expect(input).toHaveValue('mugshot');
+    await input.press('ArrowDown');
+    await expect(input).toHaveValue('draft');
+    await input.fill('password');
+    await input.press('Enter');
+    await expect(region.getByRole('log')).toContainText(
+      'Wrong command, type help instead.',
+    );
+    await input.fill('clear');
+    await input.press('Enter');
+    await expect(region.getByRole('log')).toBeEmpty();
+    await input.fill('report');
+    await input.press('Enter');
+    await expect(links).toHaveCount(1);
+    await expect(
+      region.getByRole('button', { name: 'Run command' }),
+    ).toHaveCount(0);
+    const dock = await region.evaluate((element) => ({
+      position: getComputedStyle(element).position,
+      background: getComputedStyle(element).backgroundColor,
+      font: getComputedStyle(element).fontFamily,
+      width: element.getBoundingClientRect().width,
+      bottom: element.getBoundingClientRect().bottom,
+    }));
+    expect(dock.position).toBe('fixed');
+    expect(dock.background).toBe('rgba(0, 0, 0, 0)');
+    expect(dock.font).toContain('Goldman');
+    // Firefox may report fractional layout rounding far below a CSS pixel.
+    expect(dock.bottom).toBeCloseTo(900, 4);
+    if (width === 1440) expect(dock.width).toBeCloseTo(width * 0.3, 0);
+    await page.locator('#faq').scrollIntoViewIfNeeded();
+    await expect(input).toBeVisible();
+    await expect(region.getByRole('button')).toHaveCount(0);
+    // Engines quantize rem sizes differently; retain subpixel tolerance, not a size change.
+    expect(
+      await input.evaluate((element) =>
+        parseFloat(getComputedStyle(element).fontSize),
+      ),
+    ).toBeCloseTo(11.2, 1);
+    await expect(links).toHaveCount(1);
+    expect(
+      await region
+        .locator('label')
+        .evaluate((element) => parseFloat(getComputedStyle(element).fontSize)),
+    ).toBeCloseTo(11.2, 1);
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth > innerWidth,
+      ),
+    ).toBe(false);
+    expect(external).toEqual([]);
+    expect(popups).toEqual([]);
+  });
+}
+
+for (const width of [390, 600]) {
+  test(`terminal is hidden at ${width}px without blocking exploration`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 844 });
+    await openShowcase(page);
+    await expect(page.locator('#terminal')).toBeHidden();
+    await expect(page.locator('#main')).toBeFocused();
+    await expect(page.getByRole('textbox', { name: 'Command' })).toHaveCount(0);
+    await page
+      .getByRole('link', { name: 'ENTER THE CYBERCLUB', exact: true })
+      .click();
+    await expect(page).toHaveURL(/#collection$/);
+    await page.setViewportSize({ width: 768, height: 1024 });
+    await expect(page.locator('#terminal')).toBeVisible();
+    await expect(page.locator('#terminal-command')).not.toBeFocused();
+    await page.setViewportSize({ width, height: 844 });
+    await expect(page.locator('#terminal')).toBeHidden();
+  });
+}

@@ -1,0 +1,26 @@
+name: Verify and deploy to prod
+on:
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: Exact merged source SHA already delivered and accepted in dev
+        type: string
+        required: true
+permissions:
+  contents: read
+  actions: read
+jobs:
+  verify_release:
+    name: Production checks
+    uses: ./.github/workflows/verify.yml
+    with:
+      source_sha: ${{ inputs.sha }}
+      environment: production
+  deploy_production:
+    name: Production delivery
+    needs: verify_release
+    if: github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch'
+    uses: ./.github/workflows/deploy.yml
+    with:
+      source_sha: ${{ inputs.sha }}
+      environment: production

@@ -1,0 +1,84 @@
+name: Verify checked source
+on:
+  workflow_call:
+    inputs:
+      source_sha:
+        type: string
+        required: true
+      environment:
+        type: string
+        required: true
+permissions:
+  contents: read
+  actions: read
+jobs:
+  verify:
+    name: Tests and build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    env:
+      CI_SOURCE_SHA: ${{ inputs.source_sha }}
+      CI_ENVIRONMENT: ${{ inputs.environment }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: ${{ github.workflow_sha }}
+          fetch-depth: 0
+          path: control
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: '24.21.0'
+      - run: node control/scripts/ci-control.mjs validate
+      - run: node control/scripts/ci-source.mjs
+      - name: Require retained dev delivery before production checks
+        if: inputs.environment == 'production'
+        run: node control/scripts/ci-dev-evidence.mjs
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: ${{ inputs.source_sha }}
+          path: candidate
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: '24.21.0'
+          cache: npm
+          cache-dependency-path: candidate/package-lock.json
+      - run: npm ci
+        working-directory: candidate
+        env:
+          npm_config_engine_strict: 'true'
+      - name: Prepare bounded browser dependency downloads
+        timeout-minutes: 2
+        run: sudo "$(command -v node)" control/scripts/ci-browser-host.mjs
+      - run: npx --no-install playwright install --with-deps chromium firefox webkit
+        timeout-minutes: 10
+        working-directory: candidate
+      - run: npm run ci:quality
+        working-directory: candidate
+      - run: npm run ci:browser
+        working-directory: candidate
+      - run: npm run ci:prepare
+        working-directory: candidate
+      - run: node control/scripts/ci-artifact.mjs prepare
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: build-${{ inputs.source_sha }}-${{ inputs.environment }}
+          path: |
+            candidate/dist/
+            candidate/ci-build.json
+          if-no-files-found: error
+          include-hidden-files: true
+          retention-days: 14
+      - name: Retain failed browser diagnostics without relaxing checks
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: browser-diagnostics-${{ inputs.environment }}
+          path: |
+            candidate/test-results/
+            candidate/playwright-report/
+          if-no-files-found: ignore
+          retention-days: 7
